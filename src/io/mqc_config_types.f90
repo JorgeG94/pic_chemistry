@@ -509,6 +509,20 @@ module mqc_config_types
          !! convergence each monomer and n-mer SCF is held to. Independent of the
          !! outer loop above, and of a top-level `keywords.scf`, so a fragment run
          !! can be converged more loosely than a whole-system one would be.
+      real(dp) :: efmo_rcut = 2.0_dp
+         !! `keywords.fragmentation.rcut`: where EFMO stops solving a dimer.
+         !!
+         !! **Unitless, not an Angstrom distance.** Each interatomic separation
+         !! is divided by the two van der Waals radii, so 1 is contact and the
+         !! 2.0 default is twice that -- a threshold that means the same thing
+         !! for two waters and for two aromatic rings, which
+         !! `keywords.fragmentation.cutoffs` (Angstrom, and MBE's) does not.
+         !! It is the `resppc` of FMO measured the same way, on a different
+         !! decision: a pair inside it is a quantum dimer, a pair beyond it is
+         !! four effective-fragment terms.
+      logical :: efmo_charge_transfer = .true.
+         !! `keywords.efmo.charge_transfer`: include `E_IJ^CT` in the far pairs.
+         !! GAMESS's EFMO has it; the 2012 method left it out.
       integer :: max_intersection_level = DEFAULT_MAX_INTERSECTION  !! Maximum k-way intersection depth for GMBE
       character(len=:), allocatable :: bond_breaking
          !! How a fragment represents a covalent bond the partition cut.

@@ -14,6 +14,7 @@ module mqc_czt_bridge
    public :: run_czt_hf
    public :: run_czt_mcscf
    public :: run_czt_fmo
+   public :: run_czt_efmo
    public :: run_czt_makefp
    public :: run_czt_neo
    public :: run_czt_charges
@@ -195,6 +196,68 @@ contains
       if (scf_density_tol < 0.0_dp) return
       if (present(comm)) return
    end subroutine run_czt_fmo
+
+   subroutine run_czt_efmo(atomic_numbers, element_symbols, coordinates, owner, &
+                           fragment_charges, basis_name, rcut, charge_transfer, &
+                           scf_drive, scf_max_iter, scf_energy_tol, scf_density_tol, &
+                           scf_grad_tol, guess, energy, terms, n_qm_pairs, n_efp_pairs, &
+                           error, verbose, aux_basis, vdwscl, quadrupole_blocks, &
+                           dynamic_tol, dynamic_maxiter, response, &
+                           allow_crap_response, response_batch)
+      !! No-op stand-in: EFMO needs the CPU integral backend
+      !!
+      !! Coordinates are Bohr; `owner(i)` is atom i's fragment, numbered from
+      !! one with no gaps.
+      use pic_types, only: dp
+      use mqc_error, only: error_t
+      use mqc_scf_types, only: scf_numerics_t
+      use mqc_program_limits, only: N_EFMO_TERMS
+      integer, intent(in) :: atomic_numbers(:)
+      character(len=*), intent(in) :: element_symbols(:)
+      real(dp), intent(in) :: coordinates(:, :)
+      integer, intent(in) :: owner(:)
+      integer, intent(in) :: fragment_charges(:)
+      character(len=*), intent(in) :: basis_name
+      real(dp), intent(in) :: rcut
+      logical, intent(in) :: charge_transfer
+      type(scf_numerics_t), intent(in) :: scf_drive
+      integer, intent(in) :: scf_max_iter
+      real(dp), intent(in) :: scf_energy_tol, scf_density_tol, scf_grad_tol
+      character(len=*), intent(in) :: guess
+      real(dp), intent(out) :: energy
+      real(dp), intent(out) :: terms(N_EFMO_TERMS)
+      integer, intent(out) :: n_qm_pairs, n_efp_pairs
+      type(error_t), intent(inout) :: error
+      logical, intent(in), optional :: verbose
+      character(len=*), intent(in), optional :: aux_basis
+      real(dp), intent(in), optional :: vdwscl
+      logical, intent(in), optional :: quadrupole_blocks
+      real(dp), intent(in), optional :: dynamic_tol
+      integer, intent(in), optional :: dynamic_maxiter
+      integer, intent(in), optional :: response
+      logical, intent(in), optional :: allow_crap_response
+      integer, intent(in), optional :: response_batch
+
+      energy = 0.0_dp
+      terms = 0.0_dp
+      n_qm_pairs = 0
+      n_efp_pairs = 0
+      call error%set(ERROR_VALIDATION, &
+                     "EFMO needs the CPU integral backend; build with "// &
+                     "-DMQC_ENABLE_CZT=ON")
+      if (size(atomic_numbers) < 0 .or. size(coordinates) < 0 .or. size(owner) < 0) return
+      if (size(fragment_charges) < 0) return
+      if (len_trim(element_symbols(1)) < 0) return
+      if (len_trim(basis_name)*len_trim(guess) < 0) return
+      if (rcut < -huge(1.0_dp) .or. charge_transfer) return
+      if (scf_drive%max_iter < 0 .or. scf_max_iter < 0) return
+      if (scf_energy_tol < 0.0_dp .or. scf_density_tol < 0.0_dp) return
+      if (scf_grad_tol < 0.0_dp) return
+      if (present(verbose) .or. present(aux_basis) .or. present(vdwscl)) return
+      if (present(quadrupole_blocks) .or. present(dynamic_tol)) return
+      if (present(dynamic_maxiter) .or. present(response)) return
+      if (present(allow_crap_response) .or. present(response_batch)) return
+   end subroutine run_czt_efmo
 
    subroutine run_czt_makefp(atomic_numbers, element_symbols, coordinates, &
                              basis_name, name, path, error, charge, verbose, &

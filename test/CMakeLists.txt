@@ -223,6 +223,15 @@ if(MQC_ENABLE_CZT)
   addtest(mqc_czt_efmo_pieces)
   target_link_libraries(test_mqc_czt_efmo_pieces PRIVATE ${MQC_INTEGRALS_LIBS})
 
+  # The orchestrator that assembles those pieces into an EFMO energy, at the
+  # four limits where the total is known by construction: every pair quantum
+  # (FMO2 in vacuo plus the many-body induction), no pair quantum (in-vacuo
+  # monomers plus the EFP-EFP energy), two fragments (the dimer's own RHF), and
+  # a trimer split one to two against a total assembled by hand. There is no
+  # external EFMO reference yet, so identities are what can be asserted.
+  addtest(mqc_czt_efmo)
+  target_link_libraries(test_mqc_czt_efmo PRIVATE ${MQC_INTEGRALS_LIBS})
+
   # Placing a fragment in an arbitrary orientation, piece by piece: the frame
   # construction, the Cartesian shell rotation as a group representation, and
   # the invariants a rotated fragment must keep. The energy test asserts the

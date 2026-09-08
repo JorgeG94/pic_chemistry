@@ -149,6 +149,7 @@ contains
       if (data%has_energy) call json%add(main_obj, "total_energy", data%total_energy)
 
       call write_sapt_section(json, main_obj, data)
+      call write_efmo_section(json, main_obj, data)
       call write_ieda_section(json, main_obj, data)
       call write_charges_section(json, main_obj, data)
       call write_fukui_section(json, main_obj, data)
@@ -882,6 +883,34 @@ contains
          end do
       end do
    end subroutine write_ieda_section
+
+   subroutine write_efmo_section(json, parent, data)
+      !! The EFMO breakdown, under `efmo`, when there is one
+      !!
+      !! Named rather than a bare array, as the SAPT one is: the order is fixed
+      !! in `EFMO_TERM_NAMES` and nothing downstream should have to know it. The
+      !! dimer counts go alongside, because the same system at two cutoffs gives
+      !! two different splits and the totals alone do not say which ran.
+      use mqc_program_limits, only: N_EFMO_TERMS, EFMO_TERM_NAMES
+      type(json_core), intent(inout) :: json
+      type(json_value), pointer, intent(in) :: parent
+      type(json_output_data_t), intent(in) :: data
+
+      type(json_value), pointer :: efmo_obj
+      integer :: i
+
+      if (.not. data%has_efmo) return
+      if (.not. allocated(data%efmo_terms)) return
+      if (size(data%efmo_terms) /= N_EFMO_TERMS) return
+
+      call json%create_object(efmo_obj, "efmo")
+      call json%add(parent, efmo_obj)
+      do i = 1, N_EFMO_TERMS
+         call json%add(efmo_obj, trim(EFMO_TERM_NAMES(i)), data%efmo_terms(i))
+      end do
+      call json%add(efmo_obj, "qm_dimers", data%efmo_qm_dimers)
+      call json%add(efmo_obj, "efp_dimers", data%efmo_efp_dimers)
+   end subroutine write_efmo_section
 
    subroutine write_sapt_section(json, parent, data)
       !! The decomposition, under `sapt`, when there is one

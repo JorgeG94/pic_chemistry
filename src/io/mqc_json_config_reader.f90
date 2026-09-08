@@ -467,6 +467,7 @@ contains
 
       call read_fragmentation(json, config, error)
       if (error%has_error()) return
+      call read_efmo(json, config)
 
       ! ---- molecules -------------------------------------------------------
       settings = .false.
@@ -537,6 +538,19 @@ contains
       call optional_string(json, "keywords.fragmentation.counterpoise", config%counterpoise)
       call optional_string(json, "keywords.fragmentation.far_field", config%fmo_far_field)
       call optional_real(json, "keywords.fragmentation.resppc", config%fmo_resppc)
+      call optional_real(json, "keywords.fragmentation.rcut", config%efmo_rcut)
+      ! Unitless and a *ratio* of a distance to a van der Waals contact, so
+      ! zero or negative is not "no cutoff" the way a negative `resppc` is: it
+      ! would put every pair in the effective list, which is EFP with in-vacuo
+      ! monomers and not the method the deck asked for. Refused rather than run.
+      if (config%efmo_rcut <= 0.0_dp) then
+         call error%set(ERROR_VALIDATION, "keywords.fragmentation.rcut must be "// &
+                        "positive. It is a separation in units of van der Waals "// &
+                        "contact, so 1.0 is touching and 2.0 (the default) is twice "// &
+                        "that; a value at or below zero leaves no pair quantum "// &
+                        "mechanical at all.")
+         return
+      end if
       call optional_int(json, "keywords.fragmentation.max_outer", config%fmo_max_outer)
       call optional_real(json, "keywords.fragmentation.outer_tolerance", config%fmo_tolerance)
       call optional_int(json, "keywords.fragmentation.scf_max_iter", config%fmo_scf_max_iter)
@@ -552,6 +566,19 @@ contains
 
       call read_cutoffs(json, config, error)
    end subroutine read_fragmentation
+
+   subroutine read_efmo(json, config)
+      !! The keywords.efmo block
+      !!
+      !! `rcut` is not here: it decides which pairs are solved quantum
+      !! mechanically, which is a property of the partition, so it is read from
+      !! `keywords.fragmentation` beside `resppc`.
+      type(json_file), intent(inout) :: json
+      type(mqc_config_t), intent(inout) :: config
+
+      call optional_logical(json, "keywords.efmo.charge_transfer", &
+                            config%efmo_charge_transfer)
+   end subroutine read_efmo
 
    subroutine read_cutoffs(json, config, error)
       !! Per-level distance cutoffs from keywords.fragmentation.cutoffs

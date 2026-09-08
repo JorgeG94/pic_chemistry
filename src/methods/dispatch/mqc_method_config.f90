@@ -21,6 +21,7 @@ module mqc_method_config
    public :: scf_numerics_t, deltascf_options_t  !! Re-exported from mqc_config_types
    public :: correlation_config_t, cc_config_t, f12_config_t
    public :: efp_config_t
+   public :: efmo_config_t
    public :: neo_config_t
    public :: pcm_config_t
    public :: properties_config_t
@@ -174,6 +175,30 @@ module mqc_method_config
          !! perturbations on top of the three dipole ones. GAMESS's `DISP7` and
          !! `DISP8`, both on by default there too.
    end type efp_config_t
+
+   type :: efmo_config_t
+      !! What an EFMO run needs beyond the basis and the SCF settings
+      !!
+      !! Two numbers, from two places on purpose. `rcut` decides which pairs
+      !! are solved quantum mechanically, which is a property of the partition,
+      !! so a deck sets it in `keywords.fragmentation` beside FMO's `resppc`.
+      !! `charge_transfer` says what the method does with the pairs once split,
+      !! and lives in `keywords.efmo`.
+      !!
+      !! The MAKEFP settings an EFMO run also needs are not duplicated here:
+      !! `keywords.efp` already carries them and reaches the backend through
+      !! `efp_config_t`, the same object a MakeFP run uses.
+      real(dp) :: rcut = 2.0_dp
+         !! `R_cut` of eq 2, **unitless**: an interatomic separation divided by
+         !! the two van der Waals radii, so 1 is contact. A pair at or inside it
+         !! is an in-vacuo quantum dimer with its pair induction subtracted; a
+         !! pair beyond it is Coulomb, dispersion, exchange repulsion and charge
+         !! transfer between two effective fragments. Nothing to do with
+         !! `keywords.fragmentation.cutoffs`, which is in Angstrom.
+      logical :: charge_transfer = .true.
+         !! Include `E_IJ^CT` in the far pairs. GAMESS's EFMO does; the original
+         !! 2012 method used electrostatics alone, so it is switchable.
+   end type efmo_config_t
 
    type :: neo_config_t
       !! What `keywords.neo` carries: which nuclei get orbitals, and in what basis
@@ -588,6 +613,8 @@ module mqc_method_config
          !! F12 explicitly correlated settings
       type(efp_config_t) :: efp
          !! MAKEFP settings: the response solve and the screening grid
+      type(efmo_config_t) :: efmo
+         !! EFMO settings: the dimer cutoff and the charge-transfer switch
       type(neo_config_t) :: neo
          !! Quantum nuclei, from `keywords.neo`
 

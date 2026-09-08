@@ -219,8 +219,11 @@ contains
    end subroutine test_frag_method
 
    subroutine test_frag_method_bad(error)
-      !! A name with no expansion behind it is refused, and told apart from one
-      !! this program simply does not know
+      !! A name with no expansion behind it is refused
+      !!
+      !! And, beside it, that a name which *does* have one is not: the two
+      !! outcomes come from the same table, so a method added to the parser and
+      !! forgotten in `fragmentation_method_implemented` fails here.
       type(error_type), allocatable, intent(out) :: error
       type(driver_config_t) :: dc
       type(error_t) :: err
@@ -233,13 +236,22 @@ contains
       if (allocated(error)) return
       call err%clear()
 
-      ! Reserved, and refused differently: "not implemented yet" and "no such
-      ! method" are different facts and a user acts on them differently.
+      ! `efmo` used to be refused here as reserved-but-unimplemented, which is
+      ! a different fact from "no such method" and was checked as such. Phase 2
+      ! built it, so what is asserted now is that it is accepted and that it
+      ! resolves to its own expansion rather than falling back to `mbe` -- which
+      ! is how a half-wired method would look: accepted, and running something
+      ! else.
       call frag_driver("efmo", dc, err)
-      call check(error, err%has_error(), "efmo must be refused until it exists")
+      call check(error,.not. err%has_error(), "efmo is implemented and must be "// &
+                 "accepted: "//err%get_message())
       if (allocated(error)) return
-      call check(error, index(err%get_message(), "implement") > 0, &
-                 "and refused as unimplemented rather than unknown: "//err%get_message())
+      call check(error, trim(dc%expansion_kind) == "efmo", &
+                 "efmo must resolve to its own expansion, not to "// &
+                 trim(dc%expansion_kind))
+      if (allocated(error)) return
+      call check(error,.not. dc%allow_overlapping_fragments, &
+                 "efmo fragments do not overlap")
       if (allocated(error)) return
       call err%clear()
    end subroutine test_frag_method_bad

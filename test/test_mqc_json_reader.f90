@@ -64,6 +64,8 @@ contains
                   new_unittest("fmo_scf_keywords", test_fmo_scf_keywords), &
                   new_unittest("df_without_aux_fails", test_df_without_aux), &
                   new_unittest("fragmentation_cutoffs", test_cutoffs), &
+                  new_unittest("efmo_keywords", test_efmo_keywords), &
+                  new_unittest("efmo_rcut_must_be_positive", test_efmo_rcut_refused), &
                   new_unittest("cutoffs_must_decrease", test_cutoffs_monotonic), &
                   new_unittest("global_groups", test_global_groups), &
                   new_unittest("nodes_per_group", test_nodes_per_group), &
@@ -845,6 +847,76 @@ contains
       if (allocated(error)) return
       call check(error, close_enough(config%fmo_scf_energy_tol, 1.0e-9_dp))
    end subroutine test_fmo_scf_keywords
+
+   subroutine test_efmo_keywords(error)
+      !! EFMO's two settings reach the config, and their defaults survive silence
+      !!
+      !! They come from two blocks on purpose: `rcut` decides which pairs get a
+      !! quantum dimer, which is a property of the partition and so sits in
+      !! `keywords.fragmentation` beside FMO's `resppc`; `charge_transfer` says
+      !! what EFMO does with the far pairs and sits in `keywords.efmo`. A case
+      !! rather than trust, because a key added to the wrong allow-list is
+      !! refused by the schema and a key read from the wrong path is silently
+      !! ignored.
+      type(error_type), allocatable, intent(out) :: error
+      type(mqc_config_t) :: config
+      type(error_t) :: parse_error
+
+      call write_deck('"method": "HF", "basis": "6-31g"', "Energy", &
+                      '"fragmentation": {"method": "efmo", "level": 2, '// &
+                      '"rcut": 1.25}, "efmo": {"charge_transfer": false}', &
+                      "", two_atoms())
+      call read_deck(config, parse_error)
+
+      call check(error,.not. parse_error%has_error(), parse_error%get_message())
+      if (allocated(error)) return
+      call check(error, config%frag_method, "efmo")
+      if (allocated(error)) return
+      call check(error, close_enough(config%efmo_rcut, 1.25_dp))
+      if (allocated(error)) return
+      call check(error,.not. config%efmo_charge_transfer, &
+                 "charge_transfer: false should switch the far-pair CT term off")
+      if (allocated(error)) return
+
+      ! Silence leaves the paper's defaults: R_cut = 2.0, charge transfer on as
+      ! GAMESS's EFMO has it.
+      call write_deck('"method": "HF", "basis": "6-31g"', "Energy", &
+                      '"fragmentation": {"method": "efmo", "level": 2}', &
+                      "", two_atoms())
+      call read_deck(config, parse_error)
+      call check(error,.not. parse_error%has_error(), parse_error%get_message())
+      if (allocated(error)) return
+      call check(error, close_enough(config%efmo_rcut, 2.0_dp))
+      if (allocated(error)) return
+      call check(error, config%efmo_charge_transfer, &
+                 "charge transfer should default to on")
+   end subroutine test_efmo_keywords
+
+   subroutine test_efmo_rcut_refused(error)
+      !! `rcut` at or below zero is refused rather than run
+      !!
+      !! It is a ratio of a separation to a van der Waals contact, so unlike
+      !! FMO's `resppc` -- where negative means "no approximation" -- there is
+      !! no reading under which a non-positive value is a request. It would put
+      !! every pair in the effective list, which is EFP with in-vacuo monomers
+      !! and a different method from the one the deck named.
+      type(error_type), allocatable, intent(out) :: error
+      type(mqc_config_t) :: config
+      type(error_t) :: parse_error
+
+      call write_deck('"method": "HF", "basis": "6-31g"', "Energy", &
+                      '"fragmentation": {"method": "efmo", "level": 2, '// &
+                      '"rcut": 0.0}', "", two_atoms())
+      call read_deck(config, parse_error)
+      call check(error, parse_error%has_error(), "rcut: 0.0 should be refused")
+      if (allocated(error)) return
+
+      call write_deck('"method": "HF", "basis": "6-31g"', "Energy", &
+                      '"fragmentation": {"method": "efmo", "level": 2, '// &
+                      '"rcut": -1.0}', "", two_atoms())
+      call read_deck(config, parse_error)
+      call check(error, parse_error%has_error(), "a negative rcut should be refused")
+   end subroutine test_efmo_rcut_refused
 
    subroutine test_cutoffs(error)
       !! Named and numeric n-mer keys both land at the right level

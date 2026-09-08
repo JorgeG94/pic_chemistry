@@ -33,6 +33,7 @@ The API docs for the code itself can be found here: https://jorgeg94.github.io/m
    geometry_optimization
    conformer_sampling
    fmo
+   efmo
    counterpoise
    continuum_solvation
    charges_and_bond_orders

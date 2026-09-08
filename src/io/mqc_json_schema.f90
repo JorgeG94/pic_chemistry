@@ -114,6 +114,8 @@ contains
       if (error%has_error()) return
       call check_grandchild_object(core, root, "keywords", "neo", neo_keys(), error)
       if (error%has_error()) return
+      call check_grandchild_object(core, root, "keywords", "efmo", efmo_keys(), error)
+      if (error%has_error()) return
       call check_grandchild_object(core, root, "keywords", "dft", dft_keys(), error)
       if (error%has_error()) return
       call check_grandchild_object(core, root, "keywords", "pcm", pcm_keys(), error)
@@ -226,6 +228,7 @@ contains
       call allow(keys, "correlation")
       call allow(keys, "cc")
       call allow(keys, "efp")
+      call allow(keys, "efmo")
       call allow(keys, "neo")
       call allow(keys, "mcscf")
       call allow(keys, "dft")
@@ -399,6 +402,17 @@ contains
       call allow(keys, "vdw_scale")
       call allow(keys, "dispersion")
    end function efp_keys
+
+   function efmo_keys() result(keys)
+      !! EFMO settings that are not a property of the partition
+      !!
+      !! `rcut` is deliberately NOT here: it decides which pairs are solved
+      !! quantum mechanically, which is a fragmentation decision and sits beside
+      !! `resppc` in `keywords.fragmentation`. What belongs here is what EFMO
+      !! does with the pairs once split.
+      type(key_set_t) :: keys
+      call allow(keys, "charge_transfer")
+   end function efmo_keys
 
    function neo_keys() result(keys)
       !! Quantum nuclei: which, and in what basis
@@ -596,6 +610,7 @@ contains
       call allow(keys, "counterpoise")
       call allow(keys, "far_field")
       call allow(keys, "resppc")
+      call allow(keys, "rcut")
       call allow(keys, "max_outer")
       call allow(keys, "outer_tolerance")
       call allow(keys, "scf_max_iter")

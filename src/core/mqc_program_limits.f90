@@ -18,6 +18,26 @@ module mqc_program_limits
    !! Terms in an EFP2 interaction energy: electrostatics, polarization,
    !! exchange repulsion, dispersion, charge transfer, and their total.
 
+   integer, parameter, public :: N_EFMO_TERMS = 8
+   !! The sums an EFMO energy is reported as; `EFMO_TERM_NAMES` names them in
+   !! slot order. Eight rather than the six of eq 6 because the far half is
+   !! reported term by term: the four effective-fragment terms are what a
+   !! comparison against another code is made of, and adding them up first
+   !! would hide which one disagreed.
+
+   character(len=*), parameter, public :: EFMO_TERM_NAMES(N_EFMO_TERMS) = &
+                                          [character(len=24) :: "monomer_sum", &
+                                                                 "qm_dimer_correction", "pair_polarization", &
+                                                                 "efp_electrostatics", "efp_dispersion", &
+                                                                 "efp_exchange_repulsion", "efp_charge_transfer", &
+                                                                 "polarization_total"]
+   !! The slot each EFMO sum occupies, and the name it is written out under.
+   !!
+   !! `pair_polarization` is `sum_IJ E_IJ^pol` over the quantum dimers and is
+   !! **subtracted** from the total; it is reported with the sign it has as a
+   !! sum, not with the sign it enters with, so that it can be compared against
+   !! another code's pair induction directly.
+
    integer, parameter, public :: N_SAPT_TERMS = 12
    !! Terms a SAPT0 interaction energy is reported as; `SAPT_TERM_NAMES` names
    !! them in slot order.

@@ -130,6 +130,18 @@ module mqc_json_output_types
          !! give; the decomposition is what the method was run for.
       logical :: has_sapt = .false.
 
+      real(dp), allocatable :: efmo_terms(:)
+         !! An EFMO energy broken into its sums, ordered by `EFMO_TERM_NAMES`.
+         !! The total goes to `total_energy` like any other method's; these are
+         !! what says where it came from, and what Phase 3 compares against
+         !! GAMESS term by term.
+      integer :: efmo_qm_dimers = 0
+      integer :: efmo_efp_dimers = 0
+         !! How the pairs split at `R_cut`. Together they are every pair, so a
+         !! deck can check the cutoff did what was intended without recomputing
+         !! the separations.
+      logical :: has_efmo = .false.
+
    contains
       procedure :: destroy => json_output_data_destroy
       procedure :: reset => json_output_data_reset
@@ -171,6 +183,7 @@ contains
       if (allocated(this%pie_coefficients)) deallocate (this%pie_coefficients)
       if (allocated(this%pie_energies)) deallocate (this%pie_energies)
       if (allocated(this%sapt_terms)) deallocate (this%sapt_terms)
+      if (allocated(this%efmo_terms)) deallocate (this%efmo_terms)
       if (allocated(this%ieda_atom)) deallocate (this%ieda_atom)
       if (allocated(this%atomic_charges)) deallocate (this%atomic_charges)
       if (allocated(this%spin_populations)) deallocate (this%spin_populations)
@@ -203,6 +216,9 @@ contains
       this%max_level = 0
       this%n_pie_terms = 0
       this%has_sapt = .false.
+      this%has_efmo = .false.
+      this%efmo_qm_dimers = 0
+      this%efmo_efp_dimers = 0
       this%has_ieda = .false.
       this%has_fukui = .false.
       this%ieda_formation = 0.0_dp

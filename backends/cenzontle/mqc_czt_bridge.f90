@@ -66,6 +66,7 @@ module mqc_czt_bridge
    public :: core_orbital_count   !! the terco backend counts its frozen core the same way
    public :: run_czt_mcscf
    public :: run_czt_fmo
+   public :: run_czt_efmo
    public :: run_czt_makefp
    public :: run_czt_neo
    public :: run_czt_charges
@@ -636,6 +637,110 @@ contains
       if (error%has_error()) return
       energy = res%energy
    end subroutine run_czt_fmo
+
+   subroutine run_czt_efmo(atomic_numbers, element_symbols, coordinates, owner, &
+                           fragment_charges, basis_name, rcut, charge_transfer, &
+                           scf_drive, scf_max_iter, scf_energy_tol, scf_density_tol, &
+                           scf_grad_tol, guess, energy, terms, n_qm_pairs, n_efp_pairs, &
+                           error, verbose, aux_basis, vdwscl, quadrupole_blocks, &
+                           dynamic_tol, dynamic_maxiter, response, &
+                           allow_crap_response, response_batch)
+      !! One effective fragment molecular orbital energy, with its breakdown
+      !!
+      !! Options arrive as plain scalars rather than the backend's own type, so
+      !! the layer above never has to see a type it cannot compile without the
+      !! backend. Coordinates are Bohr; `owner(i)` is atom i's fragment,
+      !! numbered from one with no gaps; `fragment_charges(k)` is fragment k's
+      !! net charge.
+      !!
+      !! `terms` comes back ordered by `EFMO_TERM_NAMES` -- the six sums of eq
+      !! 6 with the far half reported term by term -- and `energy` is their
+      !! combination with `pair_polarization` subtracted, as `run_efmo` assembles
+      !! it rather than as this routine re-adds it.
+      use mqc_czt_efmo, only: efmo_options_t, efmo_result_t, run_efmo
+      use mqc_program_limits, only: N_EFMO_TERMS
+      use pic_types, only: dp
+      use mqc_error, only: error_t
+      integer, intent(in) :: atomic_numbers(:)
+      character(len=*), intent(in) :: element_symbols(:)
+      real(dp), intent(in) :: coordinates(:, :)     !! (3, natm), Bohr
+      integer, intent(in) :: owner(:)
+      integer, intent(in) :: fragment_charges(:)
+      character(len=*), intent(in) :: basis_name
+      real(dp), intent(in) :: rcut
+         !! `R_cut` of eq 2, unitless. See `efmo_config_t`.
+      logical, intent(in) :: charge_transfer
+      type(scf_numerics_t), intent(in) :: scf_drive
+         !! How every SCF here is driven -- monomer and dimer alike. A
+         !! `scf_numerics_t` rather than more scalars: it lives in
+         !! `mqc_config_types`, so the layer above can name it without being
+         !! able to compile this backend.
+      integer, intent(in) :: scf_max_iter
+      real(dp), intent(in) :: scf_energy_tol, scf_density_tol, scf_grad_tol
+      character(len=*), intent(in) :: guess
+      real(dp), intent(out) :: energy
+      real(dp), intent(out) :: terms(N_EFMO_TERMS)
+      integer, intent(out) :: n_qm_pairs, n_efp_pairs
+      type(error_t), intent(inout) :: error
+      logical, intent(in), optional :: verbose
+      character(len=*), intent(in), optional :: aux_basis
+         !! Fit the MAKEFP response Hessian against this basis instead of
+         !! building it exactly. Absent, the build is exact.
+      real(dp), intent(in), optional :: vdwscl
+         !! This and the ones below are the `keywords.efp` group, forwarded to
+         !! every fragment's MAKEFP and not read here.
+      logical, intent(in), optional :: quadrupole_blocks
+      real(dp), intent(in), optional :: dynamic_tol
+      integer, intent(in), optional :: dynamic_maxiter
+      integer, intent(in), optional :: response
+      logical, intent(in), optional :: allow_crap_response
+      integer, intent(in), optional :: response_batch
+
+      type(efmo_options_t) :: opts
+      type(efmo_result_t) :: res
+      character(len=2), allocatable :: symbols(:)
+      integer :: i
+
+      energy = 0.0_dp
+      terms = 0.0_dp
+      n_qm_pairs = 0
+      n_efp_pairs = 0
+
+      allocate (symbols(size(atomic_numbers)))
+      do i = 1, size(atomic_numbers)
+         symbols(i) = adjustl(element_symbols(i))
+      end do
+
+      opts%basis = basis_name
+      opts%rcut = rcut
+      opts%charge_transfer = charge_transfer
+      opts%scf = scf_drive
+      opts%scf_max_iter = scf_max_iter
+      opts%scf_energy_tol = scf_energy_tol
+      opts%scf_density_tol = scf_density_tol
+      opts%scf_grad_tol = scf_grad_tol
+      opts%guess = guess
+      if (present(verbose)) opts%verbose = verbose
+      if (present(aux_basis)) opts%aux_basis = aux_basis
+      if (present(vdwscl)) opts%vdw_scale = vdwscl
+      if (present(quadrupole_blocks)) opts%quadrupole_blocks = quadrupole_blocks
+      if (present(dynamic_tol)) opts%dynamic_tolerance = dynamic_tol
+      if (present(dynamic_maxiter)) opts%dynamic_maxiter = dynamic_maxiter
+      if (present(response)) opts%response = response
+      if (present(allow_crap_response)) opts%allow_crap_response = allow_crap_response
+      if (present(response_batch)) opts%response_batch = response_batch
+
+      call run_efmo(atomic_numbers, symbols, coordinates, owner, fragment_charges, &
+                    opts, res, error)
+      if (error%has_error()) return
+
+      energy = res%energy
+      terms = [res%monomer_sum, res%dimer_correction, res%pair_polarization, &
+               res%far_electrostatics, res%far_dispersion, res%far_exchange_repulsion, &
+               res%far_charge_transfer, res%polarization_total]
+      n_qm_pairs = res%n_qm_pairs
+      n_efp_pairs = res%n_efp_pairs
+   end subroutine run_czt_efmo
 
    subroutine run_czt_hf(settings, fragment, result, want_gradient, want_hessian)
       !! Closed-shell HF for one fragment, on the CPU

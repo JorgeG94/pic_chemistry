@@ -24,9 +24,11 @@ module mqc_fragmentation_method
    !!
    !! A new expansion needs an integer here, a `case` in each of the three
    !! procedures, and nothing else -- the adapter reads the mapping rather than
-   !! branching on a name. `efmo` is listed and refused for exactly that
-   !! reason: the name is reserved, and a deck that asks for it gets "not
-   !! implemented yet" rather than "unknown method", which are different facts.
+   !! branching on a name. A name that is known and not yet built stays in
+   !! `parse_fragmentation_method` while failing `fragmentation_method_implemented`,
+   !! so a deck asking for it gets "not implemented yet" rather than "unknown
+   !! method", which are different facts. `efmo` was that until Phase 2 built
+   !! the orchestrator; nothing is in that state today.
    use pic_types, only: dp
    implicit none
    private
@@ -51,7 +53,11 @@ module mqc_fragmentation_method
       !! The fragment molecular orbital method: fragment SCFs converged in each
       !! other's electrostatic potential, then n-mer corrections on top.
    integer, parameter :: FRAG_METHOD_EFMO = 5
-      !! Effective fragment molecular orbital. Reserved, not implemented.
+      !! Effective fragment molecular orbital: in-vacuo monomers and near
+      !! dimers, effective fragment potentials for the far pairs, and one
+      !! many-body induction over every fragment. It takes neither the MBE nor
+      !! the FMO path -- `expansion_kind` is `"efmo"` and the driver dispatches
+      !! it whole to `run_czt_efmo`.
 
 contains
 
@@ -63,7 +69,7 @@ contains
       !! `error%set`.
       character(len=:), allocatable :: text
 
-      text = "mbe, ee-mbe, gmbe, fmo"
+      text = "mbe, ee-mbe, gmbe, fmo, efmo"
    end function fragmentation_method_list
 
    pure subroutine parse_fragmentation_method(name, method, ok)
@@ -97,9 +103,6 @@ contains
       case ("fmo")
          method = FRAG_METHOD_FMO
       case ("efmo")
-         ! Known, so the refusal can say what it actually is. `ok` is still
-         ! true: the caller checks `fragmentation_method_implemented` and gives
-         ! the better message.
          method = FRAG_METHOD_EFMO
       case default
          method = FRAG_METHOD_UNKNOWN
@@ -113,7 +116,8 @@ contains
       logical :: yes
 
       yes = method == FRAG_METHOD_MBE .or. method == FRAG_METHOD_EE_MBE .or. &
-            method == FRAG_METHOD_GMBE .or. method == FRAG_METHOD_FMO
+            method == FRAG_METHOD_GMBE .or. method == FRAG_METHOD_FMO .or. &
+            method == FRAG_METHOD_EFMO
    end function fragmentation_method_implemented
 
    pure function fragmentation_method_name(method) result(name)
@@ -151,6 +155,11 @@ contains
          kind = "ee-mbe"
       case (FRAG_METHOD_FMO)
          kind = "fmo"
+      case (FRAG_METHOD_EFMO)
+         ! Not an expansion the term builders can run: EFMO has no n-mer list
+         ! and no subset closure, so the driver sends it whole to the backend
+         ! before the fragmented path is entered.
+         kind = "efmo"
       case default
          kind = "mbe"
       end select
