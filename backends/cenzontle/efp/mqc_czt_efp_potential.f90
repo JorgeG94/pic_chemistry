@@ -133,6 +133,11 @@ module mqc_czt_efp_potential
       integer :: n_occ = 0        !! Including the core, which `CTFOK` needs
       integer :: n_lmo = 0        !! Valence localized orbitals
       integer :: multiplicity = 1
+      real(dp) :: scf_energy = 0.0_dp
+         !! The RHF total energy of the monomer this potential was made from,
+         !! nuclear repulsion included. **EFMO's `E_I^0`**: the fragment sum of
+         !! eq 6 is these numbers, so the SCF behind a potential is not run a
+         !! second time to get them.
       logical :: quadrupole_blocks = .true.
          !! Whether `dipquad` and `quadquad` are computed and written
       real(dp) :: vdwscl = DEFAULT_VDW_SCALE
@@ -203,6 +208,7 @@ contains
       if (allocated(self%screen2)) deallocate (self%screen2)
       if (allocated(self%screen)) deallocate (self%screen)
       if (allocated(self%basis_lines)) deallocate (self%basis_lines)
+      self%scf_energy = 0.0_dp
       self%n_points = 0
       self%n_atoms = 0
       self%nao = 0
@@ -216,7 +222,7 @@ contains
                                  energy_tol, density_tol, grad_tol_in, &
                                  scf_in, max_iter_in, dynamic_tol, &
                                  dynamic_maxiter, response, allow_crap_response, &
-                                 response_batch, quadrupole_blocks)
+                                 response_batch, quadrupole_blocks, scf_out)
       !! The whole pipeline: SCF, localization, and every parameter block
       !!
       !! The order is forced by what depends on what: the SCF gives the density
@@ -296,6 +302,15 @@ contains
          !! `keywords.efp.response`, as one of the `EFP_RESPONSE_*` codes: build the
          !! response operator, never build it, or let the size rule decide. Passed
          !! through to `dynamic_polarizability`, which is where the choice is made.
+
+      type(rhf_result_t), intent(out), optional :: scf_out
+         !! The converged monomer SCF, handed back rather than discarded.
+         !!
+         !! **This is what EFMO's `E_I^0` is.** A fragment's in-vacuo energy and
+         !! its potential come from the same reference determinant, so an EFMO
+         !! run that asked for both separately would run every monomer's SCF
+         !! twice; `pot%scf_energy` carries the total alone and this carries the
+         !! orbitals a correlated `E_I^0` would continue from.
 
       type(czt_molecule_t) :: mol, aux
       type(rhf_result_t) :: scf
@@ -535,6 +550,8 @@ contains
                              "or name gradient_tolerance, to converge it further.")
       end if
       pot%n_occ = scf%n_occupied
+      pot%scf_energy = scf%energy
+      if (present(scf_out)) scf_out = scf
       if (talk) call report(stage, "SCF", talk)
       if (talk) then
          write (line, "(A,F18.10)") "  RHF energy ", scf%energy

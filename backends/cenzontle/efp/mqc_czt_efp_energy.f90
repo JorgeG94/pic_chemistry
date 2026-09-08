@@ -38,6 +38,12 @@ module mqc_czt_efp_energy
    public :: efp_energy_t
    public :: efp_interaction_energy
    public :: place_fragment
+   ! What EFMO needs of this module: one pair at a time, since its energy
+   ! expression treats a pair as either quantum-mechanical or effective and
+   ! never as part of one system-wide sum.
+   public :: efp_pair_energy_t
+   public :: efp_pair_terms
+   public :: pair_polarization_energy
 
    ! How far a deck atom may sit from where the potential's own geometry puts it,
    ! after the rigid shift, before the placement is refused. A fragment is rigid,
@@ -48,6 +54,24 @@ module mqc_czt_efp_energy
    ! Every multipole rank the electrostatics carries: charges, dipoles,
    ! quadrupoles and octupoles.
    integer, parameter :: MAX_RANK = 3
+
+   type :: efp_pair_energy_t
+      !! The EFP terms of **one** fragment pair, polarization excluded
+      !!
+      !! What eq 6 of the EFMO paper sums over the far pairs: Coulomb,
+      !! dispersion, exchange repulsion and charge transfer. Induction is absent
+      !! by construction rather than by omission -- it is many-body and lives in
+      !! the one `E_pol^total` over every fragment.
+      integer :: i = 0, j = 0                  !! Which two fragments, as given
+      real(dp) :: electrostatics = 0.0_dp
+      real(dp) :: exchange_repulsion = 0.0_dp
+      real(dp) :: dispersion = 0.0_dp     !! Damped `E6 + E7 + E8`
+      real(dp) :: dispersion_e6 = 0.0_dp
+      real(dp) :: dispersion_e7 = 0.0_dp
+      real(dp) :: dispersion_e8 = 0.0_dp
+      real(dp) :: charge_transfer = 0.0_dp
+      real(dp) :: total = 0.0_dp          !! The four above, no polarization
+   end type efp_pair_energy_t
 
    type :: efp_energy_t
       !! One interaction energy, kept broken down by term
@@ -156,6 +180,170 @@ contains
 
       call system%destroy()
    end function efp_interaction_energy
+
+   function pair_polarization_energy(frag_i, frag_j, translation_i, translation_j, &
+                                     error) result(energy)
+      !! The induction energy of one *isolated* pair of fragments
+      !!
+      !! **`E_IJ^pol` of the EFMO energy**, and the reason it exists: every
+      !! quantum-mechanical dimer of eq 6 already holds the mutual induction of
+      !! its two fragments, which `E_pol^total` -- the induction solved over
+      !! every fragment at once -- would then count a second time. So the pair
+      !! term is subtracted from each near dimer, and for that subtraction to be
+      !! clean it has to be *the same quantity* the total is built from.
+      !!
+      !! Which is why this is the same solver on a two-fragment system rather
+      !! than a pair formula: same static field truncated at the quadrupole, the
+      !! same screening `build_efp_system` puts on the points, and the same
+      !! iteration to the same default tolerance, because no optional is passed
+      !! here and none is passed by `efp_interaction_energy` either. A pair
+      !! solved with a different convergence or a different field rank would
+      !! leave a residue in the total that looks like three-body induction.
+      !!
+      !! Cheap: two fragments carry a couple of dozen polarizable points.
+      type(efp_fragment_t), intent(in) :: frag_i, frag_j
+      real(dp), intent(in) :: translation_i(3), translation_j(3)   !! Bohr
+      type(error_t), intent(inout) :: error
+      real(dp) :: energy
+
+      type(efp_fragment_t) :: pair(2)
+      type(efp_system_t) :: system
+      real(dp) :: shifts(3, 2)
+
+      energy = 0.0_dp
+      pair(1) = frag_i
+      pair(2) = frag_j
+      shifts(:, 1) = translation_i
+      shifts(:, 2) = translation_j
+
+      call build_efp_system(pair, shifts, system, error)
+      if (error%has_error()) return
+      energy = polarization_energy(system, pair, error)
+      call system%destroy()
+   end function pair_polarization_energy
+
+   function efp_pair_terms(fragments, translations, pairs, error, charge_transfer_on) &
+      result(terms)
+      !! The EFP terms of a given list of pairs, one result per pair
+      !!
+      !! **The far half of the EFMO energy.** A pair beyond `R_cut` contributes
+      !! `E_IJ^Coul + E_IJ^disp + E_IJ^ExRep + E_IJ^CT` and nothing else;
+      !! induction is deliberately absent, being carried whole by the
+      !! system-wide `E_pol^total`. `pairs(:, k)` names the two fragments of
+      !! pair `k` as indices into `fragments`.
+      !!
+      !! **No `place_fragment`.** That routine finds the rigid transform between
+      !! a deck's atoms and a potential's own geometry, which a potential made on
+      !! the fly for the geometry it is used at does not need: the fragment is
+      !! already in its working frame and the translation is whatever the caller
+      !! passes, commonly zero.
+      !!
+      !! **Electrostatics is decomposed by building a two-fragment system per
+      !! pair**, because `electrostatic_energy` works on a flattened point set
+      !! and takes no pair mask. That is exact rather than an approximation: the
+      !! energy is a sum over point pairs on *different* fragments, and the
+      !! charge-penetration screening is itself pairwise, so a system of two
+      !! fragments reproduces their contribution to the full sum term by term.
+      !! The one thing it does not reproduce is the *absence* of screening: the
+      !! full system switches penetration off entirely when any fragment lacks a
+      !! `SCREEN2` block, where a pair of screened fragments keeps it.
+      !!
+      !! A term whose data a potential does not carry is left at zero, as in
+      !! `efp_interaction_energy`.
+      type(efp_fragment_t), intent(in) :: fragments(:)
+      real(dp), intent(in) :: translations(:, :)   !! (3, n_fragments), Bohr
+      integer, intent(in) :: pairs(:, :)           !! (2, n_pairs), into `fragments`
+      type(error_t), intent(inout) :: error
+      logical, intent(in), optional :: charge_transfer_on
+         !! Include `E_IJ^CT`. Default true, which is what GAMESS's EFMO does;
+         !! the original method left it out, so it is switchable.
+      type(efp_pair_energy_t), allocatable :: terms(:)
+
+      type(efp_fragment_t) :: pair(2)
+      type(efp_system_t) :: system
+      real(dp) :: shifts(3, 2)
+      integer :: n, k, a, b
+      logical :: have_dynamic, have_lmo, have_ct, want_ct
+
+      n = size(pairs, 2)
+      allocate (terms(n))
+      if (size(pairs, 1) /= 2) then
+         call error%set(ERROR_VALIDATION, "efp: a pair list must be (2, n_pairs)")
+         return
+      end if
+      if (size(translations, 1) /= 3 .or. size(translations, 2) /= size(fragments)) then
+         call error%set(ERROR_VALIDATION, "efp: one translation per fragment is "// &
+                        "needed, as (3, n_fragments)")
+         return
+      end if
+      want_ct = .true.
+      if (present(charge_transfer_on)) want_ct = charge_transfer_on
+
+      do k = 1, n
+         a = pairs(1, k)
+         b = pairs(2, k)
+         if (a < 1 .or. b < 1 .or. a > size(fragments) .or. b > size(fragments) &
+             .or. a == b) then
+            call error%set(ERROR_VALIDATION, "efp: a pair names a fragment that is "// &
+                           "not in the list, or names one twice")
+            return
+         end if
+         terms(k)%i = a
+         terms(k)%j = b
+
+         pair(1) = fragments(a)
+         pair(2) = fragments(b)
+         shifts(:, 1) = translations(:, a)
+         shifts(:, 2) = translations(:, b)
+         call build_efp_system(pair, shifts, system, error)
+         if (error%has_error()) return
+         terms(k)%electrostatics = electrostatic_energy(system, MAX_RANK, screen=.true.)
+         call system%destroy()
+
+         have_dynamic = fragments(a)%has_dynamic .and. fragments(b)%has_dynamic
+         have_lmo = fragments(a)%has_lmo .and. fragments(b)%has_lmo
+         have_ct = fragments(a)%has_ctvec .and. fragments(b)%has_ctvec &
+                   .and. fragments(a)%has_ctfok .and. fragments(b)%has_ctfok
+
+         if (have_lmo) then
+            terms(k)%exchange_repulsion = exchange_repulsion(fragments(a), fragments(b), &
+                                                             translations(:, a), &
+                                                             translations(:, b), error)
+            if (error%has_error()) return
+         end if
+
+         if (have_dynamic .and. have_lmo) then
+            terms(k)%dispersion_e6 = dispersion_e6_damped(fragments(a), fragments(b), &
+                                                          translations(:, a), &
+                                                          translations(:, b), error)
+            if (error%has_error()) return
+            if (fragments(a)%has_dipquad .and. fragments(b)%has_dipquad) then
+               terms(k)%dispersion_e7 = dispersion_e7_damped(fragments(a), fragments(b), &
+                                                             translations(:, a), &
+                                                             translations(:, b), error)
+               if (error%has_error()) return
+            end if
+            if (fragments(a)%has_quadquad .and. fragments(b)%has_quadquad) then
+               terms(k)%dispersion_e8 = dispersion_e8_damped(fragments(a), fragments(b), &
+                                                             translations(:, a), &
+                                                             translations(:, b), error)
+               if (error%has_error()) return
+            end if
+         end if
+
+         if (have_ct .and. want_ct) then
+            terms(k)%charge_transfer = charge_transfer(fragments(a), fragments(b), &
+                                                       translations(:, a), &
+                                                       translations(:, b), error)
+            if (error%has_error()) return
+         end if
+
+         terms(k)%dispersion = terms(k)%dispersion_e6 + terms(k)%dispersion_e7 &
+                               + terms(k)%dispersion_e8
+         terms(k)%total = terms(k)%electrostatics + terms(k)%exchange_repulsion &
+                          + terms(k)%dispersion + terms(k)%charge_transfer
+      end do
+   end function efp_pair_terms
 
    subroutine place_fragment(frag, coords, rot, translation, error)
       !! Where a deck's atoms put a fragment: a rotation and a shift

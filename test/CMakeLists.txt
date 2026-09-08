@@ -214,6 +214,15 @@ if(MQC_ENABLE_CZT)
   addtest(mqc_czt_efp_energy)
   target_link_libraries(test_mqc_czt_efp_energy PRIVATE ${MQC_INTEGRALS_LIBS})
 
+  # The five pieces EFMO is assembled from, each on its own: the SCF MAKEFP
+  # hands back, a potential converted to a fragment in memory, the pair
+  # induction that is subtracted from every near dimer, the vdW-scaled cutoff
+  # that decides which dimers those are, and the EFP terms of a chosen pair
+  # list. Nothing is wired together yet, and each of these fails silently -- as
+  # a plausible shift in a total -- if it is only checked through one.
+  addtest(mqc_czt_efmo_pieces)
+  target_link_libraries(test_mqc_czt_efmo_pieces PRIVATE ${MQC_INTEGRALS_LIBS})
+
   # Placing a fragment in an arbitrary orientation, piece by piece: the frame
   # construction, the Cartesian shell rotation as a group representation, and
   # the invariants a rotated fragment must keep. The energy test asserts the

@@ -28,6 +28,11 @@ module mqc_czt_efp_read
 
    public :: efp_fragment_t
    public :: read_efp_potential
+   ! Exposed so a potential held in memory can be turned into a fragment
+   ! without a file: the projection basis is the one block a converter cannot
+   ! copy field for field, because the potential carries it as the text lines
+   ! the writer emits and only this routine knows how to read them.
+   public :: read_projection_basis
    ! How many components each stored multipole carries. Exposed because anything
    ! that unpacks one needs the same count, and two files agreeing by coincidence
    ! is how a packing convention drifts.

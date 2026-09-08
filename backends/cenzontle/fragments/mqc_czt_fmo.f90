@@ -89,8 +89,7 @@ module mqc_czt_fmo
    use mqc_convergence_report, only: convergence_header, convergence_footer
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
    use mqc_error, only: error_t, ERROR_VALIDATION
-   use mqc_elements, only: element_vdw_radius
-   use mqc_physical_constants, only: ANGSTROM_TO_BOHR
+   use mqc_czt_efmo_pairs, only: vdw_scaled_distance
    use mqc_physical_fragment, only: system_geometry_t
    use mqc_bond_perception, only: connected_components, find_severed_bonds, severed_bond_t
    use mqc_czt_afo, only: afo_model_t, afo_options_t, afo_hybrid_t, build_afo_model, &
@@ -1266,16 +1265,16 @@ contains
       real(dp), intent(out) :: r
       type(error_t), intent(inout) :: error
 
-      real(dp) :: scale
-
-      scale = (element_vdw_radius(fa%z(ia)) + element_vdw_radius(fb%z(ib)))*ANGSTROM_TO_BOHR
-      if (scale <= 0.0_dp) then
+      ! The formula itself lives in `mqc_czt_efmo_pairs`, because EFMO's dimer
+      ! cutoff measures the same separation and two copies of it would drift.
+      ! A negative result means an element with no tabulated radius.
+      r = vdw_scaled_distance(fa%z(ia), fa%xyz(:, ia), fb%z(ib), fb%xyz(:, ib))
+      if (r < 0.0_dp) then
          call error%set(ERROR_VALIDATION, "fmo: no van der Waals radius for element "// &
                         to_char(fa%z(ia))//" or "//to_char(fb%z(ib))//", so the "// &
                         "separation the point-charge cutoff is measured in is undefined")
          return
       end if
-      r = norm2(fa%xyz(:, ia) - fb%xyz(:, ib))/scale
    end subroutine unitless_distance
 
    subroutine local_coulomb(frag, group_z, group_sym, group_xyz, group_nao, near, &
