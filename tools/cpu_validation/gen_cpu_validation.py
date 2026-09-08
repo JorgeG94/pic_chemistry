@@ -336,6 +336,15 @@ HAND_MAINTAINED = {
     "cpu/mqc/makefp/water_makefp.json",
     "cpu/mqc/makefp/water_makefp_df.json",
     "cpu/mqc/makefp/hydronium_makefp.json",
+    # EFMO. The reference is *ours*, checked against GAMESS rather than generated
+    # from it: GAMESS's EFMO and this one agree on the fragment sum, the quantum
+    # dimer corrections and the exchange repulsion, and differ by construction on
+    # the electrostatics (GAMESS's EFMO runs its multipoles unscreened) and on the
+    # induction (GAMESS damps the induced-dipole field, this does not), so no
+    # GAMESS number is the same quantity. PySCF has no EFMO at all. See
+    # PRESERVED_TESTS below for the per-term comparison.
+    "cpu/mqc/efmo/efmo_prism_rcut1.json",
+    "cpu/mqc/efmo/efmo_cage_rcut2.json",
     # The double hybrid's Hessian on a basis with d functions, whose reference is
     # *ours*. Not because none could be generated but because none can be
     # generated well: differencing a pinned-grid PySCF energy -- the construction
@@ -2581,6 +2590,22 @@ def pyscf_rhf(atoms, basis, aux="", multiplicity=1, ecp=""):
 # because that is the assertion -- an EFP2 interaction must not depend on how the
 # fragments are placed.
 PRESERVED_TESTS = [
+    {
+        "name": "EFMO water prism 6-31G rcut 1.0, mixed QM/EFP (CPU)",
+        "input": "inputs/cpu/mqc/efmo/efmo_prism_rcut1.json",
+        "expected_energy": -456.004182668797,
+        "tolerance": 1.0e-8,
+        "type": "fragmented",
+        "reference_note": "reference is this program's own EFMO total from a build converging every monomer and dimer SCF to 1e-12 in energy and 1e-10 in density; the shipped 1e-10/1e-8 defaults reproduce it to 1e-12, and one thread against four moves it 2e-12, which is what the tolerance is sized from. GAMESS 2026 (gamess-hollerith, $FMO IEFMO=1 MODEFM(1)=0,16,1,1,1 RESDIM=1.0 RESPPC=-1 RESPAP=0, RHF/6-31G) gives -456.004043215 for the same deck, 1.39e-4 Ha away, and the split is the same 9 quantum / 6 effective dimers. Term by term against GAMESS, in Hartree: monomer sum -455.897884060 vs -455.897884083; quantum dimer correction -0.080550071 vs -0.080550070; exchange repulsion -0.000173890 vs -0.000173890; dispersion -0.000414173 vs -0.000498590, which is not a disagreement either: that GAMESS run asked for MODEFM(3)=1, its E6 plus a third of E6, while this code sums damped E6+E7+E8. Asked for E6+E7+E8 (MODEFM(3)=32) GAMESS gives -0.004814275 against our -0.004781495 on the same cluster at rcut 0.3, where every pair is effective and the term is ten times larger; electrostatics -0.011699269 vs -0.011620536, ours the more negative because GAMESS's EFMO runs its multipoles with no charge-penetration screening while this code applies the potential's own; pair induction 0.013033887 vs 0.012557400 and total induction -0.026488526 vs -0.025869694, ours the more negative because GAMESS damps the induced-dipole field with a Tang-Toennies factor at a = 0.6 and this code does not. Neither difference is a disagreement about the same number.",
+    },
+    {
+        "name": "EFMO water cage 6-31G rcut 2.0, all dimers quantum (CPU)",
+        "input": "inputs/cpu/mqc/efmo/efmo_cage_rcut2.json",
+        "expected_energy": -456.001105444487,
+        "tolerance": 1.0e-8,
+        "type": "fragmented",
+        "reference_note": "reference is this program's own EFMO total, same 1e-12 build and same tolerance reasoning as the prism case. rcut 2.0 puts all fifteen pairs in the quantum list, so this case pins the fragment sum, the dimer corrections and the induction with no effective-fragment term at all -- the complement of the prism deck. GAMESS gives -456.000949506, 1.56e-4 Ha away, all of it the induction damping described there.",
+    },
     {
         "name": "EFP2 water dimer 6-31G* (CPU)",
         "input": "inputs/cpu/mqc/efp/water_dimer_efp.json",

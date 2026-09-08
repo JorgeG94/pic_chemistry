@@ -593,9 +593,12 @@ contains
       !! whole QM/EFP decision of eq 6.
       type(error_type), allocatable, intent(out) :: error
 
-      real(dp), parameter :: O_VDW = 1.52_dp, H_VDW = 1.10_dp
-         !! Bondi, as `mqc_elements` carries them. Written out so the geometry
-         !! below is derived here rather than read back from the code.
+      real(dp), parameter :: O_VDW = 1.40_dp, H_VDW = 1.20_dp
+         !! GAMESS's `$FMO VDWRAD` table, as `mqc_atomic_radii` carries it.
+         !! Written out so the geometry below is derived here rather than read
+         !! back from the code. Bondi's 1.52 and 1.10 are *not* what the cutoff
+         !! is measured in -- the FMO literature quotes `R_cut` against this
+         !! table, and the two disagree by six per cent on a water pair.
       real(dp), parameter :: RCUT = 2.0_dp
       type(error_t) :: err
       integer :: z(3), owner(6), z_pair(6)

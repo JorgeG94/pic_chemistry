@@ -514,8 +514,8 @@ contains
       if (allocated(error)) return
       ! The separations this geometry was built for, so a change to the radii or
       ! to the chain would fail here rather than silently reclassify a pair.
-      call check(error, res%pairs(1)%r, SPACING_12/(2.0_dp*1.52_dp), thr=1.0e-10_dp, &
-                 message="R_12 is not the oxygen separation over twice the oxygen radius")
+      call check(error, res%pairs(1)%r, SPACING_12/(2.0_dp*1.40_dp), thr=1.0e-10_dp, &
+                 message="R_12 is not the oxygen separation over twice the GAMESS FMO oxygen radius")
       if (allocated(error)) return
 
       shifts = 0.0_dp

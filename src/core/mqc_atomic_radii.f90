@@ -13,6 +13,7 @@ module mqc_atomic_radii
    !! | `covalent_radius_emsley`  | Emsley, as GAMESS, Z <= 36 | DMA bond midpoints    |
    !! | `vdw_radius_bondi`        | Bondi/Mantina, Z <= 18     | PCM cavity            |
    !! | `vdw_radius_geodesic`     | GAMESS geodesic, Z <= 17   | ESP screening grid    |
+   !! | `vdw_radius_fmo`          | GAMESS `$FMO VDWRAD`       | FMO/EFMO pair cutoffs |
    !!
    !! The Bragg-Slater radii that size the DFT partition cells are *not* here:
    !! they live in the generated `mqc_dft_radial_data`, reached through
@@ -29,8 +30,9 @@ module mqc_atomic_radii
    public :: covalent_radius_emsley    !! Emsley/GAMESS covalent radius, Angstrom
    public :: vdw_radius_bondi          !! Bondi/Mantina van der Waals radius, Angstrom
    public :: vdw_radius_geodesic       !! GAMESS geodesic van der Waals radius, Angstrom
-   public :: MAX_Z_CORDERO, MAX_Z_EMSLEY, MAX_Z_BONDI, MAX_Z_GEODESIC
-   public :: GEODESIC_RADIUS_DEFAULT
+   public :: vdw_radius_fmo            !! GAMESS FMO van der Waals radius, Angstrom
+   public :: MAX_Z_CORDERO, MAX_Z_EMSLEY, MAX_Z_BONDI, MAX_Z_GEODESIC, MAX_Z_FMO
+   public :: GEODESIC_RADIUS_DEFAULT, FMO_RADIUS_DEFAULT
 
    integer, parameter :: MAX_Z_CORDERO = 96
       !! Cordero's set stops at curium; past it there are no consensus radii.
@@ -42,6 +44,10 @@ module mqc_atomic_radii
    integer, parameter :: MAX_Z_BONDI = 18
 
    integer, parameter :: MAX_Z_GEODESIC = 17
+
+   integer, parameter :: MAX_Z_FMO = 35
+      !! Past bromine GAMESS's FMO table is `FMO_RADIUS_DEFAULT` throughout, so
+      !! there is nothing to tabulate.
 
    real(dp), parameter :: GEODESIC_RADIUS_DEFAULT = 1.8_dp
    !! What an element absent from the geodesic table takes, as GAMESS does.
@@ -104,6 +110,23 @@ module mqc_atomic_radii
                           1.20_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.85_dp, 1.50_dp, 1.50_dp, &
                           1.40_dp, 1.35_dp, 0.0_dp, 0.0_dp, 0.0_dp, 2.07_dp, 2.05_dp, &
                           1.96_dp, 1.89_dp, 1.80_dp]
+
+   real(dp), parameter :: FMO_RADIUS_DEFAULT = 2.5_dp
+      !! What GAMESS's `vdwr0` carries for every element it does not name.
+
+   real(dp), parameter :: FMO_RADII(MAX_Z_FMO) = [ &
+      !! GAMESS's `$FMO VDWRAD` defaults (`vdwr0` in `fmoio.f90`), Angstrom.
+      !!
+      !! **Not Bondi**, and the difference is not cosmetic: Bondi puts hydrogen
+      !! at 1.10 and oxygen at 1.52, this table at 1.20 and 1.40, so the same
+      !! water pair comes out at a different multiple of contact and a cutoff of
+      !! 2.0 falls on the other side of it. The FMO literature's `RESPPC`,
+      !! `RESDIM` and `R_cut` values are all quoted against *this* table.
+                          1.20_dp, 1.20_dp, 1.37_dp, 1.45_dp, 1.45_dp, 1.50_dp, 1.50_dp, &
+                          1.40_dp, 1.35_dp, 1.30_dp, 1.57_dp, 1.36_dp, 1.24_dp, 1.17_dp, &
+                          1.80_dp, 1.75_dp, 1.70_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, &
+                          2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, &
+                          2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.50_dp, 2.30_dp]
 
 contains
 
@@ -168,5 +191,21 @@ contains
       if (GEODESIC_RADII(atomic_number) <= 0.0_dp) return
       radius = GEODESIC_RADII(atomic_number)
    end function vdw_radius_geodesic
+
+   pure function vdw_radius_fmo(atomic_number) result(radius)
+      !! GAMESS FMO van der Waals radius in Angstrom, for the fragment-pair cutoff
+      !!
+      !! Substitutes `FMO_RADIUS_DEFAULT` for an element outside the table, as
+      !! GAMESS does. A separation in units of contact is a screening decision,
+      !! not an energy, so a coarse radius costs a pair its class and never a
+      !! number; refusing the element instead would refuse every heavy-atom
+      !! system GAMESS runs.
+      integer, intent(in) :: atomic_number
+      real(dp) :: radius
+
+      radius = FMO_RADIUS_DEFAULT
+      if (atomic_number < 1 .or. atomic_number > MAX_Z_FMO) return
+      radius = FMO_RADII(atomic_number)
+   end function vdw_radius_fmo
 
 end module mqc_atomic_radii

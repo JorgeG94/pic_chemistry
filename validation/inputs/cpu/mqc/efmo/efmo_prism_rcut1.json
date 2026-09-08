@@ -1,0 +1,81 @@
+{
+    "schema": {
+        "name": "mqc-frag",
+        "version": "1.0"
+    },
+    "molecules": [
+        {
+            "xyz": "../../../sample_inputs/prism.xyz",
+            "molecular_charge": 0,
+            "molecular_multiplicity": 1,
+            "fragments": [
+                [
+                    0,
+                    1,
+                    2
+                ],
+                [
+                    3,
+                    4,
+                    5
+                ],
+                [
+                    6,
+                    7,
+                    8
+                ],
+                [
+                    9,
+                    10,
+                    11
+                ],
+                [
+                    12,
+                    13,
+                    14
+                ],
+                [
+                    15,
+                    16,
+                    17
+                ]
+            ],
+            "fragment_charges": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "fragment_multiplicities": [
+                1,
+                1,
+                1,
+                1,
+                1,
+                1
+            ]
+        }
+    ],
+    "model": {
+        "method": "hf",
+        "basis": "6-31g"
+    },
+    "keywords": {
+        "fragmentation": {
+            "method": "efmo",
+            "level": 2,
+            "rcut": 1.0
+        },
+        "efmo": {
+            "charge_transfer": true
+        }
+    },
+    "system": {
+        "logger": {
+            "level": "Info"
+        }
+    },
+    "driver": "Energy"
+}

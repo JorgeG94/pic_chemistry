@@ -24,7 +24,7 @@ module mqc_czt_efmo_pairs
    !! formula rather than two that can drift apart.
    use pic_types, only: dp
    use mqc_error, only: error_t, ERROR_VALIDATION
-   use mqc_elements, only: element_vdw_radius
+   use mqc_atomic_radii, only: vdw_radius_fmo
    use mqc_physical_constants, only: ANGSTROM_TO_BOHR
    use pic_io, only: to_char
    implicit none
@@ -45,20 +45,21 @@ contains
    pure function vdw_scaled_distance(z_a, xyz_a, z_b, xyz_b) result(r)
       !! One atom pair's separation in units of their van der Waals contact
       !!
-      !! Negative when either element has no tabulated radius, which is a
-      !! question the caller has to answer -- the separation is undefined, not
-      !! large -- rather than something to substitute a default for here.
+      !! The radii are GAMESS's `$FMO VDWRAD` table and **not** Bondi's. FMO's
+      !! `RESPPC` and `RESDIM`, and EFMO's `R_cut`, are all quoted in the
+      !! literature against that table; with Bondi's hydrogen and oxygen the same
+      !! water pair comes out 6 per cent further apart, which is enough to move a
+      !! dimer across `R_cut = 2.0` and change which pairs are solved quantum
+      !! mechanically. Every element has a radius here -- GAMESS substitutes 2.5
+      !! Angstrom for the ones it does not name -- so the result is never
+      !! negative and the caller has no undefined case to answer for.
       integer, intent(in) :: z_a, z_b
       real(dp), intent(in) :: xyz_a(3), xyz_b(3)   !! Bohr
       real(dp) :: r
 
       real(dp) :: scale
 
-      scale = (element_vdw_radius(z_a) + element_vdw_radius(z_b))*ANGSTROM_TO_BOHR
-      if (scale <= 0.0_dp) then
-         r = -1.0_dp
-         return
-      end if
+      scale = (vdw_radius_fmo(z_a) + vdw_radius_fmo(z_b))*ANGSTROM_TO_BOHR
       r = norm2(xyz_a - xyz_b)/scale
    end function vdw_scaled_distance
 
